@@ -1,3 +1,2 @@
 #!/bin/bash
-./setup_infrastructure_topology.sh
-./setup_endpoints.sh
+./setup_topology.sh
