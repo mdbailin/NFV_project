@@ -1,5 +1,7 @@
 # Project
 This repo contains sample JSON files for this project. sfc_\<num\>.json shows JSON samples used to register a chain. launch_sfc_\<num\>.json shows JSON samples used to launch NF instances for a chain, and scale_sfc_\<num\>.json shows JSON samples used to scale and add additional NF instances for a chain.
+
+Add your project code to the controller.py file  
   
 You can use the following workflow to test your implementation:
 
