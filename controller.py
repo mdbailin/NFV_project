@@ -47,7 +47,7 @@ url = '/nfv_manager/{method}'
 
 class NFVController(rest_controller):
   '''
-    Ryu controller for routing flows using NFVI Manager Cluster State.
+    OS Ken controller for routing flows using NFVI Manager Cluster State.
   '''
   OFP_VERSIONS = [ofproto_v1_3.OFP_VERSION]
   _CONTEXTS = {'wsgi': WSGIApplication}
