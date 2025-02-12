@@ -27,9 +27,9 @@ A typical NFV control plane consists of an NFV Infrastructure (NFVI) Manager and
 
 <p align="center">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="">
-      <source media="(prefers-color-scheme: light)" srcset="">
-      <img  src="https://www.gatech.edu/themes/custom/gatech/images/gatech-color_logo.png">
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.gatech.edu/cs8803-SIC/project3/assets/59780/7add62bd-6204-4a77-b813-23ff466dfe06">
+      <source media="(prefers-color-scheme: light)" srcset="https://github.gatech.edu/cs8803-SIC/project3/assets/59780/e411fe1a-16d8-4c46-8a1f-cf1f3b60b2fb">
+      <img  src="https://github.gatech.edu/cs8803-SIC/project3/assets/59780/e411fe1a-16d8-4c46-8a1f-cf1f3b60b2fb">
     </picture>
 </p>
 
@@ -37,7 +37,6 @@ A typical NFV control plane consists of an NFV Infrastructure (NFVI) Manager and
 #### 2.2.1 NFVI Manager 
 
 The NFVI Manager is responsible for managing the computational resources (servers) in the NFV cluster. It deploys network function (NF) instances on the servers and monitors them for failures and resource utilization. System administrators communicate with the NFVI Manager to register NF Chains for a specific tenant's traffic - this communication can be done using a high level API like REST. Information about registered NF chains and deployed NF instances is stored in the " *cluster state*".
-
 
 #### 2.2.2 SDN Controller 
 
@@ -58,9 +57,9 @@ The network topology of the infrastructure is as shown in the figure below. For 
 
 <p align="center">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="">
-      <source media="(prefers-color-scheme: light)" srcset="">
-      <img  src="https://www.gatech.edu/themes/custom/gatech/images/gatech-color_logo.png">
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.gatech.edu/cs8803-SIC/project3/assets/59780/cd140f77-22af-4504-a795-dbc75da6972b">
+      <source media="(prefers-color-scheme: light)" srcset="https://github.gatech.edu/cs8803-SIC/project3/assets/59780/19da230c-3905-44f4-8cc2-1769fba5718d">
+      <img  src="https://github.gatech.edu/cs8803-SIC/project3/assets/59780/19da230c-3905-44f4-8cc2-1769fba5718d">
     </picture>
 </p>
 
@@ -69,7 +68,7 @@ Network functions that are deployed dynamically will be connected to one of the 
 ### 4.2 Running NFV Control Plane on a single-node
 This project is designed to be deployed on a single machine, as the previous workshops. The entire NFV control plane, i.e. NFVI Manager and SDN Controller are implemented as a Python process (as a OS Ken application running with osken-manager). The "*cluster state*" is maintained as in-memory data structures. The NFVI Manager should use the `subprocess` module in Python to execute commands for creating Docker containers on the host machine.
 
-### 4.3 NFVI Manager : Web service for launching network functions
+### 4.3 NFVI Manager: Web service for launching network functions
 You must to listen to deployment and scale-up REST requests coming from the system administrator. The requests are sent using the HTTP `PUT` method and the body of the request is represented as a JSON. HTTP requests containing a JSON body can be sent using the following bash command.
 
 
@@ -87,7 +86,7 @@ For receiving REST requests, the starter code for this project includes a wrappe
 #### 4.3.1 Registering a network function chain
 The JSON document containing request body for registering a network function chain should look like the following and contain all the mentioned fields.
 
-```json
+```js
 {
     "nf_chain":["fw", "nat"], // custom identifiers for NFs (referenced below)
     "chain_id" : 1,
@@ -121,7 +120,7 @@ Each chain will be associated with a single SRC-DST host pair. A single SRC-DST 
 
 #### 4.3.2 Launching instances of an NF chain
 
-```json
+```js
 {
     "chain_id":1,
     "nat" : [ // array with each element being a nat instance
@@ -177,7 +176,7 @@ Now you know all the points where an ARP request can originate for a given NF ch
 For testing the implementation, you need to create a traffic profile with an increasing number of flows with time. For simplicity, you can divide testing period into multiple periods, and each period should have a certain number of active flows. You can create new flows in each period (flows don't have to live beyond the period). The time-based profile of the traffic is shown in the following.
 
 
-```json
+```js
 {
 	"profiles": [
         {
