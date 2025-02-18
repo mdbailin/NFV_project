@@ -13,7 +13,6 @@ You can use the following workflow to test your implementation:
 
 Finally you need to build a traffic generator that generates traffic between Docker containers based on the a profile of the format present in `traffic_profile.json`.
 
-<!-- \abstract{} -->
 ## 1. Expected outcome
 The student is going to learn how to build an orchestration layer for NFV. This involves creating a web service for deploying virtual network functions which communicates with an SDN control application for configuring traffic forwarding to the created NF instances. The student will use the created setup for dynamically scaling the NF chain deployment while ensuring connection-affinity in packet forwarding.
 
@@ -36,7 +35,7 @@ A typical NFV control plane consists of an NFV Infrastructure (NFVI) Manager and
 
 #### 2.2.1 NFVI Manager 
 
-The NFVI Manager is responsible for managing the computational resources (servers) in the NFV cluster. It deploys network function (NF) instances on the servers and monitors them for failures and resource utilization. System administrators communicate with the NFVI Manager to register NF Chains for a specific tenant's traffic - this communication can be done using a high level API like REST. Information about registered NF chains and deployed NF instances is stored in the " *cluster state*".
+The NFVI Manager is responsible for managing the computational resources (servers) in the NFV cluster. It deploys network function (NF) instances on the servers and monitors them for failures and resource utilization. System administrators communicate with the NFVI Manager to register NF Chains for a specific tenant's traffic - this communication can be done using a high level API like REST. Information about registered NF chains and deployed NF instances is stored in the "*cluster state*".
 
 #### 2.2.2 SDN Controller 
 
@@ -66,7 +65,7 @@ The network topology of the infrastructure is as shown in the figure below. For 
 Network functions that are deployed dynamically will be connected to one of the two switches (`ovs-br1` and `ovs-br2`).
 
 ### 4.2 Running NFV Control Plane on a single-node
-This project is designed to be deployed on a single machine, as the previous workshops. The entire NFV control plane, i.e. NFVI Manager and SDN Controller are implemented as a Python process (as a OS Ken application running with osken-manager). The "*cluster state*" is maintained as in-memory data structures. The NFVI Manager should use the `subprocess` module in Python to execute commands for creating Docker containers on the host machine.
+This project is designed to be deployed on a single machine, as the previous workshops. The entire NFV control plane, i.e. NFVI Manager and SDN Controller are implemented as a Python process (as an OS Ken application running with `osken-manager`). The "*cluster state*" is maintained as in-memory data structures. The NFVI Manager should use the `subprocess` module in Python to execute commands for creating Docker containers on the host machine.
 
 ### 4.3 NFVI Manager: Web service for launching network functions
 You must to listen to deployment and scale-up REST requests coming from the system administrator. The requests are sent using the HTTP `PUT` method and the body of the request is represented as a JSON. HTTP requests containing a JSON body can be sent using the following bash command.
@@ -155,7 +154,7 @@ Upon receiving the request to launch NF instances for a given NF chain, you need
 
 2. Run the container using the Docker CLI.
 
-3. Add ports to the container and the chosen switch using *ovs-docker* CLI.
+3. Add ports to the container and the chosen switch using `ovs-docker` CLI.
 
 4. Run the initialization script in the container with arguments provided in the JSON body of launch request (Section [4.3.2](#432-launching-instances-of-an-nf-chain)).
 
@@ -230,14 +229,14 @@ For each chain, create 4 flows from the internal endpoint to external endpoint o
 6. Then use a new traffic profile wherein for each chain, create 8 flows from the internal endpoint to external endpoint of that chain, and make these 8 flows last for 30 seconds.
 We should be able to see that the new flows are passing through the new instances created by the scale command in Step 6 and that they follow connection affinity
 ### 6.4 Written report
-Submit a report that outlines the implementation of the NFV Control Plane. The report should cover the following points :
+Submit a report that outlines the implementation of the NFV Control Plane. The report should cover the following points:
 
 - Description of data structures used to maintain *cluster state*
 
 - Technique used for maintaining connection affinity in spite of a packet modifying NAT NF
 ### 6.5 Important Details about Demo
 
-When running the demo, the grading team will be using the ovs-ofctl commands to view the flows that are created to verify connection affinity and correctness. Following a single flow through the system and demonstrating where it is going to demonstrate correctness is paramount to success in this project. We expect teams to know what ports corresponds to which instances to simplify this process, and to make it simple for the TAs to view exactly where a particular flow goes.
+When running the demo, the grading team will be using the `ovs-ofctl` commands to view the flows that are created to verify connection affinity and correctness. Following a single flow through the system and demonstrating where it is going to demonstrate correctness is paramount to success in this project. We expect teams to know what ports corresponds to which instances to simplify this process, and to make it simple for the TAs to view exactly where a particular flow goes.
 
 Something that makes this easier is to use the `grep` command to grep for specific tcp ports that are used in the project. These ports typically follow a single flow.
 
