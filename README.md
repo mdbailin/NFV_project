@@ -56,9 +56,9 @@ The network topology of the infrastructure is as shown in the figure below. For 
 
 <p align="center">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.gatech.edu/cs8803-SIC/project3/assets/59780/cd140f77-22af-4504-a795-dbc75da6972b">
-      <source media="(prefers-color-scheme: light)" srcset="https://github.gatech.edu/cs8803-SIC/project3/assets/59780/19da230c-3905-44f4-8cc2-1769fba5718d">
-      <img  src="https://github.gatech.edu/cs8803-SIC/project3/assets/59780/19da230c-3905-44f4-8cc2-1769fba5718d">
+      <source media="(prefers-color-scheme: dark)" srcset="https://github.gatech.edu/cs8803-SIC/project3/assets/59780/fd96df48-82c4-4702-aa8c-9d8e96fec03d">
+      <source media="(prefers-color-scheme: light)" srcset="https://github.gatech.edu/cs8803-SIC/project3/assets/59780/2d55e3f3-6885-4051-be2d-565b59cbe090">
+      <img  src="https://github.gatech.edu/cs8803-SIC/project3/assets/59780/2d55e3f3-6885-4051-be2d-565b59cbe090">
     </picture>
 </p>
 
