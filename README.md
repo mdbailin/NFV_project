@@ -32,6 +32,12 @@ A typical NFV control plane consists of an NFV Infrastructure (NFVI) Manager and
     </picture>
 </p>
 
+<p align="center">
+	<em>
+		High Level Overview of a Typical NFV Orchestrator
+	</em>
+</p>
+
 
 #### 2.2.1 NFVI Manager 
 
@@ -60,6 +66,12 @@ The network topology of the infrastructure is as shown in the figure below. For 
       <source media="(prefers-color-scheme: light)" srcset="https://github.gatech.edu/cs8803-SIC/project3/assets/59780/2d55e3f3-6885-4051-be2d-565b59cbe090">
       <img  src="https://github.gatech.edu/cs8803-SIC/project3/assets/59780/2d55e3f3-6885-4051-be2d-565b59cbe090">
     </picture>
+</p>
+
+<p align="center">
+	<em>
+		Schematic of Network Topology
+	</em>
 </p>
 
 Network functions that are deployed dynamically will be connected to one of the two switches (`ovs-br1` and `ovs-br2`).
