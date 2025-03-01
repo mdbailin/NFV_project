@@ -13,6 +13,36 @@ You can use the following workflow to test your implementation:
 
 Finally you need to build a traffic generator that generates traffic between Docker containers based on the a profile of the format present in `traffic_profile.json`.
 
+<details>
+<summary>Table of Contents</summary>
+
+1. [Expected outcome](#1-expected-outcome)
+2. [Background](#2-background)
+    1. [Network Function (NF) Chains](#21-network-function-nf-chains)
+    2. [NFV Orchestrator](#22-nfv-orchestrator)
+        1. [NFVI Manager](#221-nfvi-manager)
+        2. [SDN Controller](#222-sdn-controller)
+3. [Download Repo](#3-download-repo)
+4. [Sections of the project](#4-sections-of-the-project)
+    1. [Network topology](#41-network-topology)
+    2. [Running NFV Control Plane on a single-node](#42-running-nfv-control-plane-on-a-single-node)
+    3. [NFVI Manager: Web service for launching network functions](#43-nfvi-manager-web-service-for-launching-network-functions)
+        1. [Registering a network function chain](#431-registering-a-network-function-chain)
+        2. [Launching instances of an NF chain](#432-launching-instances-of-an-nf-chain)
+    4. [Launching network functions](#44-launching-network-functions)
+    5. [Load balancing between network function instances](#45-load-balancing-between-network-function-instances)
+        1. [Connection-affinity for NAT NF](#451-connection-affinity-for-nat-nf)
+    6. [Responding to ARP requests](#46-responding-to-arp-requests)
+5. [Testing](#5-testing)
+6. [Deliverables](#6-deliverables)
+    1. [Code](#61-code)
+    2. [Test cases](#62-test-cases)
+    3. [Demo](#63-demo)
+    4. [Written report](#64-written-report)
+    5. [Important Details about Demo](#65-important-details-about-demo)
+
+</details>
+
 ## 1. Expected outcome
 The student is going to learn how to build an orchestration layer for NFV. This involves creating a web service for deploying virtual network functions which communicates with an SDN control application for configuring traffic forwarding to the created NF instances. The student will use the created setup for dynamically scaling the NF chain deployment while ensuring connection-affinity in packet forwarding.
 
