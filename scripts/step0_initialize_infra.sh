@@ -1,2 +1,3 @@
 #!/bin/bash
-./setup_topology.sh
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"$script_dir/setup_topology.sh"
