@@ -232,6 +232,48 @@ class ClusterState:
             chain_id = self.endpoints_to_chain.get((src, dst))
             return self.chains.get(chain_id) if chain_id is not None else None
 
+        def validate(self) -> List[str]:
+        """
+        Sanity-check internal consistency. Returns a list of error strings;
+        an empty list means the state looks coherent.
+        """
+        errors: List[str] = []
+        with self._lock:
+            # Every chain_id referenced in endpoints_to_chain must exist in chains
+            for pair_key, chain_id in self.endpoints_to_chain.items():
+                if chain_id not in self.chains:
+                    errors.append(f"endpoints_to_chain references unknown chain_id '{chain_id}' for pair {pair_key}")
+
+            for chain_id, chain in self.chains.items():
+                # endpoints_to_chain must have the reverse mapping
+                pair_key = (chain.src, chain.dst)
+                if self.endpoints_to_chain.get(pair_key) != chain_id:
+                    errors.append(f"Chain '{chain_id}' has no matching entry in endpoints_to_chain")
+
+                # Endpoint IPs must be in ip_to_mac
+                for label, ep in (("src", chain.src), ("dst", chain.dst)):
+                    if self.ip_to_mac.get(ep.ip) != ep.mac:
+                        errors.append(f"Chain '{chain_id}' {label} IP {ep.ip} missing or wrong in ip_to_mac")
+
+                # All nf_chain types must have an nf_specs entry
+                for nf_type in chain.nf_chain:
+                    if nf_type not in chain.nf_specs:
+                        errors.append(f"Chain '{chain_id}' nf_type '{nf_type}' has no NFSpec")
+
+                # All instances must belong to a type in nf_chain
+                for nf_type, insts in chain.instances.items():
+                    if nf_type not in chain.nf_chain:
+                        errors.append(f"Chain '{chain_id}' has instances for unknown nf_type '{nf_type}'")
+                    # Instance port IPs must be in ip_to_mac
+                    for inst in insts:
+                        for port in inst.ports.values():
+                            if self.ip_to_mac.get(port.ip) != port.mac:
+                                errors.append(
+                                    f"Chain '{chain_id}' instance '{inst.instance_id}' "
+                                    f"port '{port.name}' IP {port.ip} missing or wrong in ip_to_mac"
+                                )
+        return errors
+
     # ---- arp helper ----
     def mac_for_ip(self, ip: str) -> Optional[str]:
         with self._lock:
