@@ -1,4 +1,3 @@
-# src/controller/cluster_state.py
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Any
@@ -193,8 +192,7 @@ class ClusterState:
 
     def get_or_pin_path(self, flow: FlowKey, chain_id: str) -> Optional[List[Instance]]:
         """
-        Return the full ordered list of instances for this flow (one per NF type, in nf_chain order),
-        pinning each atomically. If any NF type has no instances, returns None.
+        Return the full ordered list of instances for this flow (one per NF type, in nf_chain order)
         Re-pins any instance that no longer exists.
 
         Returns None if chain does not exist or there is a NF type with no instances
@@ -232,7 +230,7 @@ class ClusterState:
             chain_id = self.endpoints_to_chain.get((src, dst))
             return self.chains.get(chain_id) if chain_id is not None else None
 
-        def validate(self) -> List[str]:
+    def validate(self) -> List[str]:
         """
         Sanity-check internal consistency. Returns a list of error strings;
         an empty list means the state looks coherent.
