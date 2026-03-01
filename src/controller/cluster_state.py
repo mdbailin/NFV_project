@@ -75,7 +75,7 @@ class Instance:
 
 @dataclass
 class Chain:
-    chain_id: str
+    chain_id: int
     nf_chain: List[str]
     src: Endpoint
     dst: Endpoint
@@ -108,13 +108,13 @@ class Chain:
 
 @dataclass
 class ClusterState:
-    chains: Dict[str, Chain] = field(default_factory=dict)
-    endpoints_to_chain: Dict[EndpointPairKey, str] = field(default_factory=dict)
+    chains: Dict[int, Chain] = field(default_factory=dict)
+    endpoints_to_chain: Dict[EndpointPairKey, int] = field(default_factory=dict)
     ip_to_mac: Dict[str, str] = field(default_factory=dict)
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     # ---- registration ----
-    def register_chain(self, chain_id: str, nf_chain: List[str], src: Endpoint, dst: Endpoint, nf_specs: Dict[str, NFSpec]) -> Optional[str]:
+    def register_chain(self, chain_id: int, nf_chain: List[str], src: Endpoint, dst: Endpoint, nf_specs: Dict[str, NFSpec]) -> Optional[str]:
         """Register a chain. Returns None on success, or an error string on failure."""
         with self._lock:
             if chain_id in self.chains:
@@ -139,7 +139,7 @@ class ClusterState:
             self.ip_to_mac[dst.ip] = dst.mac
             return None
 
-    def add_instance(self, chain_id: str, inst: Instance) -> Optional[str]:
+    def add_instance(self, chain_id: int, inst: Instance) -> Optional[str]:
         with self._lock:
             chain = self.chains.get(chain_id)
             if chain is None:
@@ -151,7 +151,7 @@ class ClusterState:
             return None
 
     # ---- selection ----
-    def select_instance_rr(self, chain_id: str, nf_type: str) -> Optional[Instance]:
+    def select_instance_rr(self, chain_id: int, nf_type: str) -> Optional[Instance]:
         with self._lock:
             chain = self.chains.get(chain_id)
             if chain is None:
@@ -190,7 +190,7 @@ class ClusterState:
     #             chain.flow_affinity.setdefault(flow, {})[nf_type] = inst.instance_id
     #         return inst
 
-    def get_or_pin_path(self, flow: FlowKey, chain_id: str) -> Optional[List[Instance]]:
+    def get_or_pin_path(self, flow: FlowKey, chain_id: int) -> Optional[List[Instance]]:
         """
         Return the full ordered list of instances for this flow (one per NF type, in nf_chain order)
         Re-pins any instance that no longer exists.
