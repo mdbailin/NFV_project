@@ -51,7 +51,6 @@ class RESTLinkage(ControllerBase):
         super(RESTLinkage, self).__init__(req, link, data, **config)
         self.controller_app = data[controller_instance_name]
 
-    #helper method for jsonifing responses
     def _json(self, status_code, payload):
         return Response(
             status=status_code,
@@ -59,9 +58,9 @@ class RESTLinkage(ControllerBase):
             body=json.dumps(payload).encode("utf-8"),
         )
 
-    # =================================================================================================
+    # ================================================================================================
     # Northbound request handling functions
-    # =================================================================================================
+    # ================================================================================================
     @route("nfv_manager", url, methods=["GET"])
     def _hello(self, req, **kwargs):
         """
@@ -75,37 +74,43 @@ class RESTLinkage(ControllerBase):
         try:
             data = req.json_body
         except Exception:
-            return self._json(400, {
-                "status": "error", 
-                "error": "Invalid or malformed JSON"
-            })
+            return self._json(
+                400, {"status": "error", "error": "Invalid or malformed JSON payload"}
+            )
 
         required = ["nf_chain", "chain_id", "SRC", "DST"]
         missing = [k for k in required if k not in data]
         if missing:
-            return self._json(400, {
-                "status": "error", 
-                "error": f"Missing required top-level fields: {missing}"
-            })
+            return self._json(
+                400,
+                {
+                    "status": "error",
+                    "error": f"Missing required top-level field(s): {missing}",
+                },
+            )
 
         nf_chain = data["nf_chain"]
-        chain_id = data["chain_id"]
+        chain_id_raw = data["chain_id"]
 
         if (
             not isinstance(nf_chain, list)
             or not nf_chain
             or not all(isinstance(x, str) for x in nf_chain)
         ):
-            return self._json(400, {
-                "status": "error", 
-                "error": "NF chain must be a non-empty list of strings"
-            })
+            return self._json(
+                400,
+                {
+                    "status": "error",
+                    "error": "nf_chain must be a non-empty list of strings",
+                },
+            )
 
-        if not isinstance(chain_id, int):
-            return self._json(400, {
-                "status": "error", 
-                "error": "chain_id must be an int"
-            })
+        try:
+            chain_id = int(chain_id_raw)
+        except Exception:
+            return self._json(
+                400, {"status": "error", "error": "chain_id must be an integer"}
+            )
 
         def parse_endpoint(obj, name):
             ep_req = ["MAC", "IP", "SWITCH_DPID", "PORT"]
@@ -124,46 +129,52 @@ class RESTLinkage(ControllerBase):
                     None,
                 )
             except Exception:
-                return None, f"{name} has invalid types (SWITCH_DPID and PORT must be ints)"
+                return (
+                    None,
+                    f"{name} has invalid types (SWITCH_DPID and PORT must be integers)",
+                )
 
-        src, err = parse_endpoint(data["SRC"], "SRC")
-        if err:
-            return self._json(400, {
-                "status": "error", 
-                "error": err
-            })
+        src, parse_err = parse_endpoint(data["SRC"], "SRC")
+        if parse_err:
+            return self._json(400, {"status": "error", "error": parse_err})
 
-        dst, err = parse_endpoint(data["DST"], "DST")
-        if err:
-            return self._json(400, {
-                "status": "error", 
-                "error": err
-            })
+        dst, parse_err = parse_endpoint(data["DST"], "DST")
+        if parse_err:
+            return self._json(400, {"status": "error", "error": parse_err})
 
         nf_specs = {}
         for nf in nf_chain:
             if nf not in data:
-                return self._json(400, {
-                    "status": "error", 
-                    "error": f"Missing nf specification block for {nf}"
-                })
+                return self._json(
+                    400,
+                    {
+                        "status": "error",
+                        "error": f"Missing NF specification block for '{nf}'",
+                    },
+                )
 
             spec = data[nf]
             spec_req = ["image", "interfaces", "init_script"]
             m = [k for k in spec_req if k not in spec]
             if m:
-                return self._json(400, {
-                    "status": "error", 
-                    "error": f"NF '{nf}' missing required field(s): {m}"
-                })
+                return self._json(
+                    400,
+                    {
+                        "status": "error",
+                        "error": f"NF '{nf}' missing required field(s): {m}",
+                    },
+                )
 
             if not isinstance(spec["interfaces"], list) or not all(
                 isinstance(x, str) for x in spec["interfaces"]
             ):
-                return self._json(400, {
-                    "status": "error", 
-                    "error": f"NF '{nf}' interfaces must be a list of strings"
-                })
+                return self._json(
+                    400,
+                    {
+                        "status": "error",
+                        "error": f"NF '{nf}' interfaces must be a list of strings",
+                    },
+                )
 
             nf_specs[nf] = NFSpec(
                 image=spec["image"],
@@ -172,20 +183,13 @@ class RESTLinkage(ControllerBase):
             )
 
         cs = self.controller_app.cluster_state
-        err = cs.register_chain(
+        reg_err = cs.register_chain(
             chain_id=chain_id, nf_chain=nf_chain, src=src, dst=dst, nf_specs=nf_specs
         )
-        if err is not None:
-            return self._json(400, {
-                "status": "error", 
-                "error": err
-            })
-        
-        #response successful
-        return self._json(200, {
-            "status": "registered", 
-            "chain_id": chain_id
-        })
+        if reg_err is not None:
+            return self._json(400, {"status": "error", "error": reg_err})
+
+        return self._json(200, {"status": "registered", "chain_id": chain_id})
 
     @route('launch_sfc', '/launch_sfc', methods=['PUT'])
     def launch_sfc(self, req, **kwargs):
