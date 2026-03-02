@@ -35,6 +35,9 @@ import threading
 import os
 import re
 
+from cluster_state import ClusterState, Endpoint, NFSpec
+from nf_launch_service import NFLaunchService, InstanceSpec
+
 #====================================================================================================
 # Global Variables
 #====================================================================================================
@@ -55,6 +58,8 @@ class NFVController(rest_controller):
   def __init__(self, *args, **kwargs):
     super(NFVController, self).__init__(*args, **kwargs)
     print("Initializing OSKen controller app")
+    self.cluster_state = ClusterState()
+    self.launch_service = NFLaunchService(self.cluster_state)
     wsgi = kwargs['wsgi']
     wsgi.register(RESTLinkage,
                   {controller_instance_name: self})
@@ -84,5 +89,47 @@ class RESTLinkage(ControllerBase):
       The function name is appended to the url path
     '''
     return Response(status=200, body="hello wsgi server")
+
+  @route('launch_sfc', '/launch_sfc', methods=['PUT'])
+  def launch_sfc(self, req, **kwargs):
+    try:
+      data = json.loads(req.body)
+    except Exception:
+      return Response(status=400, body="Invalid JSON")
+
+    # chain_id must be an integer
+    try:
+      chain_id = int(data["chain_id"])
+    except (KeyError, ValueError, TypeError):
+      return Response(status=400, body="Missing or invalid 'chain_id' (must be integer)")
+
+    # Every key other than chain_id is an NF type with a list of instance specs
+    by_nf_type: dict = {}
+    for key, value in data.items():
+      if key == "chain_id":
+        continue
+      if not isinstance(value, list):
+        return Response(status=400, body=f"Instances for '{key}' must be a JSON array")
+      specs = []
+      for entry in value:
+        args = entry.get("args", [])
+        ip_by_iface = entry.get("ip", {})
+        specs.append(InstanceSpec(args=args, ip_by_iface=ip_by_iface))
+      by_nf_type[key] = specs
+
+    result = self.controller_app.launch_service.launch_instances(chain_id, by_nf_type)
+
+    body = json.dumps({
+      "launched": result.launched,
+      "failed": result.failed,
+    })
+
+    if result.failed and not result.launched:
+      status = 400
+    elif result.failed:
+      status = 207
+    else:
+      status = 200
+    return Response(status=status, content_type="application/json", body=body)
 
  
