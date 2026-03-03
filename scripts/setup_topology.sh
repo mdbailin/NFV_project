@@ -113,14 +113,18 @@ echo "[*] Starting OS-Ken controller (logs: $LOGFILE)"
 # Adjust this path if your controller entrypoint differs
 CONTROLLER_PY="$ROOT_DIR/src/controller/controller.py"
 
-# Start in background; OS-Ken binary name may vary by install:
-# Try osken-manager first, fallback to ryu-manager if needed.
-if command -v osken-manager >/dev/null 2>&1; then
+# Prefer project-local venv osken-manager to avoid PATH/user-env issues under sudo.
+OSKEN_VENV_BIN="$ROOT_DIR/venv/bin/osken-manager"
+
+# Start in background; OS-Ken binary name may vary by install.
+if [[ -x "$OSKEN_VENV_BIN" ]]; then
+  nohup "$OSKEN_VENV_BIN" "$CONTROLLER_PY" >"$LOGFILE" 2>&1 &
+elif command -v osken-manager >/dev/null 2>&1; then
   nohup osken-manager "$CONTROLLER_PY" >"$LOGFILE" 2>&1 &
 elif command -v ryu-manager >/dev/null 2>&1; then
   nohup ryu-manager "$CONTROLLER_PY" >"$LOGFILE" 2>&1 &
 else
-  echo "ERROR: neither osken-manager nor ryu-manager found in PATH"
+  echo "ERROR: no controller launcher found (checked $OSKEN_VENV_BIN, osken-manager, ryu-manager)"
   exit 1
 fi
 
