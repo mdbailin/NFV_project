@@ -112,33 +112,11 @@ class RESTLinkage(ControllerBase):
                 400, {"status": "error", "error": "chain_id must be an integer"}
             )
 
-        def parse_endpoint(obj, name):
-            ep_req = ["MAC", "IP", "SWITCH_DPID", "PORT"]
-            m = [k for k in ep_req if k not in obj]
-            if m:
-                return None, f"{name} missing field(s): {m}"
-
-            try:
-                return (
-                    Endpoint(
-                        mac=obj["MAC"],
-                        ip=obj["IP"],
-                        switch_dpid=int(obj["SWITCH_DPID"]),
-                        port=int(obj["PORT"]),
-                    ),
-                    None,
-                )
-            except Exception:
-                return (
-                    None,
-                    f"{name} has invalid types (SWITCH_DPID and PORT must be integers)",
-                )
-
-        src, parse_err = parse_endpoint(data["SRC"], "SRC")
+        src, parse_err = self._parse_endpoint(data["SRC"], "SRC")
         if parse_err:
             return self._json(400, {"status": "error", "error": parse_err})
 
-        dst, parse_err = parse_endpoint(data["DST"], "DST")
+        dst, parse_err = self._parse_endpoint(data["DST"], "DST")
         if parse_err:
             return self._json(400, {"status": "error", "error": parse_err})
 
@@ -191,6 +169,28 @@ class RESTLinkage(ControllerBase):
 
         return self._json(200, {"status": "registered", "chain_id": chain_id})
 
+    def _parse_endpoint(self, obj, name):
+        ep_req = ["MAC", "IP", "SWITCH_DPID", "PORT"]
+        m = [k for k in ep_req if k not in obj]
+        if m:
+            return None, f"{name} missing field(s): {m}"
+
+        try:
+            return (
+                Endpoint(
+                    mac=obj["MAC"],
+                    ip=obj["IP"],
+                    switch_dpid=int(obj["SWITCH_DPID"]),
+                    port=int(obj["PORT"]),
+                ),
+                None,
+            )
+        except Exception:
+            return (
+                None,
+                f"{name} has invalid types (SWITCH_DPID and PORT must be integers)",
+            )
+
     @route('launch_sfc', '/launch_sfc', methods=['PUT'])
     def launch_sfc(self, req, **kwargs):
         try:
@@ -231,5 +231,5 @@ class RESTLinkage(ControllerBase):
             status = 207
         else:
             status = 200
-      return Response(status=status, content_type="application/json", body=body)
+        return Response(status=status, content_type="application/json", body=body)
 
