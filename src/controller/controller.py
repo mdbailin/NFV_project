@@ -34,7 +34,7 @@ class NFVController(rest_controller):
         super(NFVController, self).__init__(*args, **kwargs)
         print("Initializing OSKen controller app")
         self.cluster_state = ClusterState()
-        self.launch_service = NFLaunchService(self.cluster_state)
+        self.launch_service = NFLaunchService(self.cluster_state, logger=self.logger)
         wsgi = kwargs["wsgi"]
         wsgi.register(RESTLinkage, {controller_instance_name: self})
 
@@ -196,13 +196,13 @@ class RESTLinkage(ControllerBase):
         try:
             data = json.loads(req.body)
         except Exception:
-            return Response(status=400, body="Invalid JSON")
+            return self._json(400, {"status": "error", "error": "Invalid JSON"})
 
         # chain_id must be an integer
         try:
             chain_id = int(data["chain_id"])
         except (KeyError, ValueError, TypeError):
-            return Response(status=400, body="Missing or invalid 'chain_id' (must be integer)")
+            return self._json(400, {"status": "error", "error": "Missing or invalid 'chain_id' (must be integer)"})
 
         # Every key other than chain_id is an NF type with a list of instance specs
         by_nf_type: dict = {}
@@ -210,7 +210,7 @@ class RESTLinkage(ControllerBase):
             if key == "chain_id":
                 continue
             if not isinstance(value, list):
-                return Response(status=400, body=f"Instances for '{key}' must be a JSON array")
+                return self._json(400, {"status": "error", "error": f"Instances for '{key}' must be a JSON array"})
             specs = []
             for entry in value:
                 args = entry.get("args", [])
@@ -220,16 +220,14 @@ class RESTLinkage(ControllerBase):
 
         result = self.controller_app.launch_service.launch_instances(chain_id, by_nf_type)
 
-        body = json.dumps({
-            "launched": result.launched,
-            "failed": result.failed,
-        })
-
         if result.failed and not result.launched:
             status = 400
         elif result.failed:
             status = 207
         else:
             status = 200
-        return Response(status=status, content_type="application/json", body=body)
+        return self._json(status, {
+            "launched": result.launched,
+            "failed": result.failed,
+        })
 

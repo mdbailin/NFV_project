@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import subprocess
 import uuid
 from dataclasses import dataclass, field
@@ -27,9 +28,10 @@ class LaunchResult:
 
 class NFLaunchService:
 
-    def __init__(self, cluster_state: ClusterState) -> None:
+    def __init__(self, cluster_state: ClusterState, logger: Optional[logging.Logger] = None) -> None:
         self._state = cluster_state
         self._switch_rr = 0
+        self._logger = logger if logger is not None else logging.getLogger(__name__)
 
     def launch_instances(self, chain_id: int, requested_NFs: Dict[str, List[InstanceSpec]] ) -> LaunchResult:
         launched = []
@@ -94,7 +96,7 @@ class NFLaunchService:
         # 1. Start container
         ok, out = _run(["docker", "run", "-d", "--net=none", "--name", container_name, nf_spec.image])
         if not ok:
-            print(f"[nf_launch] docker run failed for {container_name}: {out}")
+            self._logger.error("[nf_launch] docker run failed for %s: %s", container_name, out)
             return None
 
         # 2 & 3 & 4. Attach each interface, then collect MAC and OVS port
@@ -102,19 +104,19 @@ class NFLaunchService:
         for iface in nf_spec.interfaces:
             ok, out = _run(["ovs-docker", "add-port", bridge, iface, container_name])
             if not ok:
-                print(f"[nf_launch] ovs-docker add-port failed for {container_name}/{iface}: {out}")
+                self._logger.error("[nf_launch] ovs-docker add-port failed for %s/%s: %s", container_name, iface, out)
                 _cleanup_container(container_name)
                 return None
 
             mac = _get_mac(container_name, iface)
             if mac is None:
-                print(f"[nf_launch] could not read MAC for {container_name}/{iface}")
+                self._logger.error("[nf_launch] could not read MAC for %s/%s", container_name, iface)
                 _cleanup_container(container_name)
                 return None
 
             ovs_port = _get_ovs_port(bridge, container_name, iface)
             if ovs_port is None:
-                print(f"[nf_launch] could not read OVS port for {container_name}/{iface}")
+                self._logger.error("[nf_launch] could not read OVS port for %s/%s", container_name, iface)
                 _cleanup_container(container_name)
                 return None
 
@@ -125,7 +127,7 @@ class NFLaunchService:
         cmd = ["docker", "exec", container_name, nf_spec.init_script] + list(spec.args)
         ok, out = _run(cmd)
         if not ok:
-            print(f"[nf_launch] init script failed for {container_name}: {out}")
+            self._logger.error("[nf_launch] init script failed for %s: %s", container_name, out)
             _cleanup_container(container_name)
             return None
 
