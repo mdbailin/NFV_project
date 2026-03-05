@@ -109,6 +109,14 @@ ip link set v_br2br1 up
 ovs-vsctl add-port "$BR1" v_br1br2 -- set Interface v_br1br2 ofport_request=1
 ovs-vsctl add-port "$BR2" v_br2br1 -- set Interface v_br2br1 ofport_request=1
 
+echo "[*] Adding static routes between subnets (192.168.1.0/24 <-> 145.12.131.0/24)"
+
+ip netns exec src1 ip route replace 145.12.131.0/24 dev v_src1
+ip netns exec src2 ip route replace 145.12.131.0/24 dev v_src2
+
+ip netns exec dst1 ip route replace 192.168.1.0/24 dev v_dst1
+ip netns exec dst2 ip route replace 192.168.1.0/24 dev v_dst2
+
 echo "[*] Starting OS-Ken controller (logs: $LOGFILE)"
 # Adjust this path if your controller entrypoint differs
 CONTROLLER_PY="$ROOT_DIR/src/controller/controller.py"
@@ -129,6 +137,10 @@ else
 fi
 
 echo $! > "$PIDFILE"
+
+echo "[*] Sanity check (routes):"
+ip netns exec src1 ip route | tail -n +1
+ip netns exec dst1 ip route | tail -n +1
 
 echo "[*] Topology ready."
 echo "    Bridges: $BR1, $BR2"
