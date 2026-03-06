@@ -92,6 +92,15 @@ teardown() {
 
     docker rm -f src1 src2 dst1 dst2 dst >/dev/null 2>&1 || true
 
+    # Remove dynamically-named NF containers (launched by /launch_sfc).
+    # Match by image name so we don't need to know the generated container names.
+    local nf_containers
+    nf_containers=$(docker ps -aq --filter ancestor=nat --filter ancestor=fw 2>/dev/null || true)
+    if [[ -n "$nf_containers" ]]; then
+        echo "        removing NF containers: $nf_containers"
+        docker rm -f $nf_containers >/dev/null 2>&1 || true
+    fi
+
     ovs-vsctl --if-exists del-br "$BR1"
     ovs-vsctl --if-exists del-br "$BR2"
 
