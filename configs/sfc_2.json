@@ -1,5 +1,5 @@
 {
-    "NF_CHAIN":["nat"],
+    "nf_chain":["nat"],
     "chain_id" : 2,
     "nat" : {
         "image" : "nat",

@@ -37,9 +37,8 @@ from pathlib import Path
 
 IPERF_PORT = 5001
 
-
 class TrafficGenerator:
-    def __init__(self, config_path, log_dir="logs", logger=None):
+    def __init__(self, config_path, log_dir="logs", logger=None, mode="auto"):
         self.config_path = config_path
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(exist_ok=True)
@@ -47,12 +46,13 @@ class TrafficGenerator:
 
         self.config = None
         self.flow_logs = []
-        self.bandwidth_logs = []  # Time-series bandwidth from iperf intervals
+        self.bandwidth_logs = []
+
+        self.mode = mode
 
     def _load_config(self):
-        """Load and validate traffic profile. Returns (config, error_msg)."""
         try:
-            with open(self.config_path, 'r') as f:
+            with open(self.config_path, "r") as f:
                 config = json.load(f)
         except FileNotFoundError:
             return None, f"Config file not found: {self.config_path}"
@@ -64,85 +64,130 @@ class TrafficGenerator:
 
         return config, None
 
-    def _validate_hosts(self):
-        """Check that all src/dst containers in config exist. Returns (success, error_msg)."""
-        all_containers = set()
+    def _all_endpoints(self):
+        all_hosts = set()
         for profile in self.config["profiles"]:
-            all_containers.add(profile["src_container"])
-            all_containers.add(profile["dst_container"])
+            all_hosts.add(profile["src_container"])
+            all_hosts.add(profile["dst_container"])
+        return all_hosts
 
+    def _docker_running_names(self):
         result = subprocess.run(
             ["docker", "ps", "--format", "{{.Names}}"],
-            capture_output=True, text=True
+            capture_output=True,
+            text=True,
         )
-        running = set(result.stdout.strip().splitlines())
+        if result.returncode != 0:
+            return set()
+        return set(result.stdout.strip().splitlines()) if result.stdout.strip() else set()
 
-        missing = all_containers - running
-        if missing:
-            return False, f"Containers not running: {missing}"
+    def _netns_names(self):
+        result = subprocess.run(["ip", "netns", "list"], capture_output=True, text=True)
+        if result.returncode != 0:
+            return set()
+        names = set()
+        for line in (result.stdout or "").splitlines():
+            parts = line.strip().split()
+            if parts:
+                names.add(parts[0])
+        return names
 
-        self.logger(f" All {len(all_containers)} containers validated")
-        return True, None
+    def _auto_select_mode(self):
+        endpoints = self._all_endpoints()
+        docker_names = self._docker_running_names()
+        netns_names = self._netns_names()
 
-    def _start_server(self, container_name, port):
-        """Start iperf3 server in a Docker container if not already running."""
-        # Check if already running
-        check = subprocess.run(
-            ["docker", "exec", container_name, "pgrep", "-f", f"iperf3.*-s.*-p {port}"],
-            capture_output=True
-        )
-        if check.returncode == 0:
-            self.logger(f"  iperf3 server already running in {container_name}:{port}")
+        docker_hits = len(endpoints & docker_names)
+        netns_hits = len(endpoints & netns_names)
+
+        if docker_hits == len(endpoints) and len(endpoints) > 0:
+            return "docker"
+        if netns_hits == len(endpoints) and len(endpoints) > 0:
+            return "netns"
+
+        if netns_hits > docker_hits:
+            return "netns"
+        if docker_hits > netns_hits:
+            return "docker"
+
+        return "netns"
+
+    def _validate_hosts(self):
+        endpoints = self._all_endpoints()
+
+        if self.mode == "auto":
+            self.mode = self._auto_select_mode()
+
+        if self.mode == "docker":
+            running = self._docker_running_names()
+            missing = endpoints - running
+            if missing:
+                return False, f"Docker containers not running: {missing}"
+            self.logger(f" All {len(endpoints)} endpoints validated as Docker containers")
+            return True, None
+
+        if self.mode == "netns":
+            netns = self._netns_names()
+            missing = endpoints - netns
+            if missing:
+                return False, f"Network namespaces not found: {missing}"
+            self.logger(f" All {len(endpoints)} endpoints validated as Linux namespaces")
+            return True, None
+
+        return False, f"Unknown mode: {self.mode}"
+
+    def _exec_in_host(self, host, args, detach=False, capture=True, text=True):
+        if self.mode == "docker":
+            cmd = ["docker", "exec"]
+            if detach:
+                cmd.append("-d")
+            cmd += [host] + args
+        else:
+            cmd = ["ip", "netns", "exec", host] + args
+
+        return subprocess.run(cmd, capture_output=capture, text=text)
+
+    def _pgrep_iperf_server(self, host, port):
+        pattern = f"iperf3.*-s.*-p {port}"
+        res = self._exec_in_host(host, ["pgrep", "-f", pattern], capture=True, text=True)
+        return res.returncode == 0
+
+    def _kill_iperf_port(self, host, port):
+        pattern = f"iperf3.*-p {port}"
+        self._exec_in_host(host, ["pkill", "-f", pattern], capture=True, text=True)
+
+    def _start_server(self, host, port):
+        if self._pgrep_iperf_server(host, port):
+            self.logger(f"  iperf3 server already running in {host}:{port}")
             return
 
-        # Kill any stale iperf3 on this port
-        subprocess.run(
-            ["docker", "exec", container_name, "pkill", "-f", f"iperf3.*-p {port}"],
-            capture_output=True
-        )
-        time.sleep(0.3)
+        self._kill_iperf_port(host, port)
+        time.sleep(0.2)
 
-        # Start fresh server (daemon mode)
-        subprocess.run(
-            ["docker", "exec", "-d", container_name,
-             "iperf3", "-s", "-p", str(port)],
-            capture_output=True
-        )
-
-        # Verify started
-        time.sleep(0.5)
-        verify = subprocess.run(
-            ["docker", "exec", container_name, "pgrep", "-f", f"iperf3.*-s.*-p {port}"],
-            capture_output=True
-        )
-        if verify.returncode == 0:
-            self.logger(f"  Started iperf3 server in {container_name}:{port}")
+        if self.mode == "docker":
+            self._exec_in_host(host, ["iperf3", "-s", "-p", str(port)], detach=True, capture=True, text=True)
         else:
-            self.logger(f"  WARNING: iperf3 server may not have started in {container_name}:{port}")
+            self._exec_in_host(host, ["iperf3", "-s", "-p", str(port), "-D"], detach=False, capture=True, text=True)
+
+        time.sleep(0.4)
+        if self._pgrep_iperf_server(host, port):
+            self.logger(f"  Started iperf3 server in {host}:{port}")
+        else:
+            self.logger(f"  WARNING: iperf3 server may not have started in {host}:{port}")
 
     def _start_all_servers(self, server_set):
-        """Start one iperf3 server per (container, port) pair in parallel."""
         self.logger("\n=== Starting iperf3 servers ===")
-
         threads = []
-        for container, port in server_set:
-            t = threading.Thread(target=self._start_server, args=(container, port))
+        for host, port in server_set:
+            t = threading.Thread(target=self._start_server, args=(host, port))
             t.start()
             threads.append(t)
-
         for t in threads:
             t.join()
-
-        time.sleep(1)
+        time.sleep(0.8)
         self.logger(f" {len(server_set)} servers started\n")
 
     def _expand_flow_windows(self, profile):
-        """
-        Expand a profile's flow windows into individual flow tasks.
-        For each window with num_flows=N, produces N separate flow tasks
-        that all share the same start/end time window.
-        Returns list of (begin_time, flow_info) tuples.
-        """
         tasks = []
         src = profile["src_container"]
         dst = profile["dst_container"]
@@ -165,11 +210,9 @@ class TrafficGenerator:
                     "flow_index": i,
                 }
                 tasks.append((start_time, flow_info))
-
         return tasks
 
     def _create_flow_result(self, flow_info, start_ts, end_ts, actual_duration):
-        """Create initial result dictionary for a flow."""
         return {
             "src_container": flow_info["src_container"],
             "dst_container": flow_info["dst_container"],
@@ -184,15 +227,9 @@ class TrafficGenerator:
             "success": False,
             "error": None,
         }
-    
-    def _parse_iperf_json(self, output):
-        """
-        Parse iperf3 output.
-        Returns (success, metrics_dict, intervals_list, error_msg)
-        """
-        out = (output or "").strip()
 
-        # If iperf printed plain-text error (common), surface it directly
+    def _parse_iperf_json(self, output):
+        out = (output or "").strip()
         if not out.startswith("{"):
             msg = out.splitlines()[-1] if out else "Empty iperf output"
             return False, None, None, msg[:200]
@@ -206,8 +243,6 @@ class TrafficGenerator:
             return False, None, None, str(data["error"])
 
         end = data.get("end", {}) if isinstance(data, dict) else {}
-
-        # Try multiple places iperf3 stores summary
         summary = {}
         for key in ("sum_received", "sum", "sum_sent"):
             if isinstance(end.get(key), dict) and end[key]:
@@ -222,23 +257,23 @@ class TrafficGenerator:
             "bits_per_second": bps,
         }
 
-        # Extract interval data for time-series bandwidth
         intervals = []
         if isinstance(data, dict) and "intervals" in data:
             for interval in data["intervals"]:
                 if "sum" in interval:
                     interval_data = interval["sum"]
-                    intervals.append({
-                        "start": interval_data.get("start", 0),
-                        "end": interval_data.get("end", 0),
-                        "bits_per_second": interval_data.get("bits_per_second", 0),
-                        "bytes": interval_data.get("bytes", 0),
-                    })
+                    intervals.append(
+                        {
+                            "start": interval_data.get("start", 0),
+                            "end": interval_data.get("end", 0),
+                            "bits_per_second": interval_data.get("bits_per_second", 0),
+                            "bytes": interval_data.get("bytes", 0),
+                        }
+                    )
 
         return True, metrics, intervals, None
 
     def _run_flow(self, flow_info):
-        """Execute a single iperf3 TCP flow via docker exec."""
         src = flow_info["src_container"]
         dst = flow_info["dst_container"]
         dst_ip = flow_info["dst_ip"]
@@ -247,23 +282,28 @@ class TrafficGenerator:
         begin_time = flow_info["begin"]
         flow_index = flow_info["flow_index"]
 
-        cmd = [
-            "docker", "exec", src,
+        cmd_args = [
             "iperf3",
-            "-c", dst_ip,
-            "-p", str(port),
-            "-t", str(duration),
-            "-J",           # JSON output (--json not recognised in iperf3 3.0.x)
-            "-i", "3",      # interval reporting every 3s
+            "-c",
+            dst_ip,
+            "-p",
+            str(port),
+            "-t",
+            str(duration),
+            "-J",
+            "-i",
+            "3",
         ]
 
         start_ts = time.time()
-        self.logger(f"[{begin_time:>4.1f}s] Flow {flow_index} starting: {src} -> {dst} ({dst_ip}:{port}, {duration}s)")
+        self.logger(
+            f"[{begin_time:>4.1f}s] Flow {flow_index} starting: {src} -> {dst} ({dst_ip}:{port}, {duration}s) [{self.mode}]"
+        )
 
-        result_proc = subprocess.run(cmd, capture_output=True, text=True)
+        result_proc = self._exec_in_host(src, cmd_args, detach=False, capture=True, text=True)
         output = result_proc.stdout
-        if not output.strip() and result_proc.stderr.strip():
-            output = result_proc.stderr  # surface iperf3 error text for diagnosis
+        if not (output or "").strip() and (result_proc.stderr or "").strip():
+            output = result_proc.stderr
 
         end_ts = time.time()
         actual_duration = end_ts - start_ts
@@ -278,36 +318,33 @@ class TrafficGenerator:
             self.logger(f"   Flow {flow_index} complete: {src} -> {dst} - {mbps:.2f} Mbps")
 
             if intervals:
-                self.bandwidth_logs.append({
-                    "src_container": src,
-                    "dst_container": dst,
-                    "port": port,
-                    "flow_index": flow_index,
-                    "begin_time": begin_time,
-                    "start_timestamp": start_ts,
-                    "intervals": intervals,
-                })
+                self.bandwidth_logs.append(
+                    {
+                        "src_container": src,
+                        "dst_container": dst,
+                        "port": port,
+                        "flow_index": flow_index,
+                        "begin_time": begin_time,
+                        "start_timestamp": start_ts,
+                        "intervals": intervals,
+                    }
+                )
         else:
             result["error"] = error_msg
             if "parse" in (error_msg or ""):
-                result["raw_output"] = output[:500]
+                result["raw_output"] = (output or "")[:500]
             self.logger(f"   Flow {flow_index} failed: {src} -> {dst} - {error_msg}")
 
         self.flow_logs.append(result)
 
     def _schedule_flows(self):
-        """Expand profiles into individual flow tasks and schedule them."""
         self.logger("\n=== Scheduling flows ===")
-
-        # Expand all profiles into (begin_time, flow_info) events
         events = []
         for profile in self.config["profiles"]:
             events.extend(self._expand_flow_windows(profile))
 
-        # Sort by begin time
         events.sort(key=lambda x: x[0])
 
-        # Assign a unique port to each flow so iperf3 servers aren't contended.
         server_set = set()
         for i, (_, flow_info) in enumerate(events):
             flow_info["port"] = IPERF_PORT + i
@@ -317,9 +354,10 @@ class TrafficGenerator:
 
         self.logger(f"Total flows scheduled: {len(events)}")
         for begin, flow in events:
-            self.logger(f"  [{begin:>4.1f}s] {flow['src_container']} -> "
-                        f"{flow['dst_container']} ({flow['dst_ip']}:{flow['port']}, "
-                        f"{flow['duration']}s, flow {flow['flow_index']})")
+            self.logger(
+                f"  [{begin:>4.1f}s] {flow['src_container']} -> {flow['dst_container']} "
+                f"({flow['dst_ip']}:{flow['port']}, {flow['duration']}s, flow {flow['flow_index']})"
+            )
 
         self.logger("\n=== Running flows ===")
         start_time = time.time()
@@ -342,21 +380,20 @@ class TrafficGenerator:
         self.logger(f"\n All flows complete ({total_time:.1f}s total)")
 
     def _save_logs(self):
-        """Save flow results to JSON lines file."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         log_file = self.log_dir / f"traffic_results_{timestamp}.jsonl"
 
-        with open(log_file, 'w') as f:
+        with open(log_file, "w") as f:
             for log in self.flow_logs:
-                f.write(json.dumps(log) + '\n')
+                f.write(json.dumps(log) + "\n")
 
         self.logger(f"\n=== Results saved to {log_file} ===")
 
         if self.bandwidth_logs:
             bw_log_file = self.log_dir / f"perceived_bandwidth_{timestamp}.jsonl"
-            with open(bw_log_file, 'w') as f:
+            with open(bw_log_file, "w") as f:
                 for log in self.bandwidth_logs:
-                    f.write(json.dumps(log) + '\n')
+                    f.write(json.dumps(log) + "\n")
             self.logger(f"Perceived bandwidth logs saved to {bw_log_file}")
 
         total = len(self.flow_logs)
@@ -371,11 +408,12 @@ class TrafficGenerator:
             self.logger("\nFailed flows:")
             for log in self.flow_logs:
                 if not log["success"]:
-                    self.logger(f"  {log['src_container']} -> {log['dst_container']}:{log['port']} "
-                                f"flow {log['flow_index']} - {log['error']}")
+                    self.logger(
+                        f"  {log['src_container']} -> {log['dst_container']}:{log['port']} "
+                        f"flow {log['flow_index']} - {log['error']}"
+                    )
 
     def setup(self):
-        """Load config and validate containers. Server startup happens in run()."""
         self.config, error = self._load_config()
         if error:
             self.logger(f"\n Error loading config: {error}")
@@ -389,10 +427,10 @@ class TrafficGenerator:
         return True
 
     def run(self):
-        """Execute full traffic generation run. Returns True on success, False on error."""
         self.logger(f"\n{'='*60}")
-        self.logger(f"NFV Traffic Generator")
+        self.logger("NFV Traffic Generator")
         self.logger(f"Config: {self.config_path}")
+        self.logger(f"Mode: {self.mode}")
         self.logger(f"{'='*60}")
 
         if self.config is None:
@@ -409,16 +447,12 @@ class TrafficGenerator:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Generate iperf3 traffic between Docker containers from a profile."
-    )
+    parser = argparse.ArgumentParser(description="Generate iperf3 traffic from a profile.")
     parser.add_argument("config", help="Path to traffic profile JSON file")
-    parser.add_argument(
-        "--log-dir", default="logs", metavar="DIR",
-        help="Directory to write result logs (default: logs)"
-    )
+    parser.add_argument("--log-dir", default="logs", metavar="DIR", help="Directory to write result logs")
+    parser.add_argument("--mode", default="auto", choices=["auto", "docker", "netns"], help="Execution mode")
     args = parser.parse_args()
 
-    gen = TrafficGenerator(args.config, log_dir=args.log_dir)
+    gen = TrafficGenerator(args.config, log_dir=args.log_dir, mode=args.mode)
     success = gen.run()
     sys.exit(0 if success else 1)
