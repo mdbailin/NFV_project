@@ -4,7 +4,7 @@ This project implements a simplified **Network Function Virtualization (NFV) con
 
 The orchestrator manages both **compute resources (NF instances)** and **network forwarding behavior**.
 
-<img src="./diagram.png?raw=1" width="700">
+![Topology Diagram](../diagram.png)
 
 ---
 
